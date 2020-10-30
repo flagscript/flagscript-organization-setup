@@ -1,0 +1,497 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: PreRequisite CloudFormation Setup for Flagscript Organiztions
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Organization
+        Parameters:
+          - OrganizationName
+          - OrganizationRegion
+      - Label:
+          default: CodeBuild
+        Parameters:
+          - CodeBuildComputeType
+          - CodeBuildImageType
+          - GitHubRepository
+      - Label:
+          default: Options
+        Parameters:
+          - DoContinousIntegration
+          - DoTemplateShare
+  Installation:
+    Accounts:
+      - root
+    Description: First template to manually run as root account user.
+    StackName: flagscript-organizations-setup
+    Regions:
+      - us-west-2   
+
+Parameters:
+
+  ################
+  # Organization #
+  ################
+  OrganizationName:
+    Default: flagscript
+    Description: The name identifier for the organization.
+    Type: String
+
+  OrganizationRegion:
+    Default: us-west-2
+    Description: The primary region for the organization setup.
+    Type: String
+
+  #############
+  # CodeBuild #
+  #############
+  CodeBuildComputeType:
+    AllowedValues:
+      - BUILD_GENERAL1_SMALL
+    Default: BUILD_GENERAL1_SMALL
+    Description: Compute Type to use for code build.
+    Type: String
+
+  CodeBuildImageType:
+    AllowedValues:
+      - aws/codebuild/amazonlinux2-x86_64-standard:3.0
+    Default: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+    Description: Image Type to use for code build.
+    Type: String
+
+  GitHubRepository:
+    Default: 
+    Description: Github Repository with source code to setup lambdas
+    Type: String
+
+  ###########
+  # Options #
+  ###########
+  DoContinousIntegration:
+    AllowedValues:
+      - false
+      - true
+    Default: false
+    Description: Whether or not to install the Continuous Integration Projects
+    Type: String 
+
+  DoTemplateShare:
+    AllowedValues:
+      - false
+      - true
+    Default: false
+    Description: Whether or not to install the Template Share Bucket (flagscript README)
+    Type: String
+
+Conditions:
+
+  DoContinousIntegration: !Equals [ !Ref DoContinousIntegration, true ]
+  DoTemplateShare: !Equals [ !Ref DoTemplateShare, true ]
+  IsOrganizationRegion: !Equals [ !Ref OrganizationRegion, !Ref 'AWS::Region' ]
+
+Resources:
+
+  ################
+  # Organization #
+  ################
+  OrganizationNameSsmParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: Idenitifcation Name to be used for Organization Resources
+      Name: /organization/name
+      Tags:
+        flagscript:application-id: organization
+        flagscript:client-id: !Ref OrganizationName
+        flagscript:environment: root
+        name: /organization/name
+      Type: String
+      Value: !Ref OrganizationName
+
+  #####################
+  # S3 Access Logging #
+  #####################
+  OrganizationS3AccessLoggingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub organization-${AWS::AccountId}-${AWS::Region}-s3-access-logs-bucket
+      LifecycleConfiguration:
+        Rules:
+          - AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+            ExpirationInDays: 14
+            Id: !Sub organization-${AWS::AccountId}-${AWS::Region}-s3-access-logs-bucket-lifecycle-rule
+            Status: Enabled
+      Tags:
+        - Key: flagscript:application-id
+          Value: organization
+        - Key: flagscript:client-id
+          Value: !Ref OrganizationName
+        - Key: flagscript:environment
+          Value: root
+        - Key: name
+          Value: !Sub organization-${AWS::AccountId}-${AWS::Region}-s3-access-logs-bucket 
+
+  OrganizationS3AccessLoggingBucketArnSsmParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: Arn of the Flagscript Organization S3 Access Logging Bucket
+      Name: /organization/s3/s3-access-logs-bucket/arn
+      Tags:
+        flagscript:application-id: organization
+        flagscript:client-id: !Ref OrganizationName
+        flagscript:environment: root
+        name: /organization/s3/s3-access-logs-bucket/arn
+      Type: String
+      Value: !GetAtt OrganizationS3AccessLoggingBucket.Arn
+
+  OrganizationS3AccessLoggingBucketNameSsmParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: Name of the Flagscript Organizations S3 Access Logging Bucket
+      Name: /organization/s3/s3-access-logs-bucket/name
+      Tags:
+        flagscript:application-id: organization
+        flagscript:client-id: !Ref OrganizationName
+        flagscript:environment: root
+        name: /organization/s3/s3-access-logs-bucket/name
+      Type: String
+      Value: !Ref OrganizationS3AccessLoggingBucket          
+
+  ########################
+  # S3 Deployment Bucket #
+  ########################
+  OrganizationDeploymentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub organization-${AWS::AccountId}-${AWS::Region}-deploy-bucket
+      LifecycleConfiguration:
+        Rules:
+          - AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+            Id: !Sub organization-${AWS::AccountId}-${AWS::Region}-deploy-bucket-lifecycle-rule
+            Status: Enabled
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 30
+              - StorageClass: GLACIER
+                TransitionInDays: 180
+      Tags:
+        - Key: flagscript:application-id
+          Value: organization
+        - Key: flagscript:client-id
+          Value: !Ref OrganizationName
+        - Key: flagscript:environment
+          Value: root
+        - Key: name
+          Value: !Sub organization-${AWS::AccountId}-${AWS::Region}-deploy-bucket
+
+  OrganizationDeploymentBucketArnSsmParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: Arn of the Flagscript Organization S3 Deployment Bucket
+      Name: /organization/s3/deployment-bucket/arn
+      Tags:
+        flagscript:application-id: organization
+        flagscript:client-id: !Ref OrganizationName
+        flagscript:environment: root
+        name: /organization/s3/deployment-bucket/arn
+      Type: String
+      Value: !GetAtt OrganizationDeploymentBucket.Arn
+
+  OrganizationDeploymentBucketNameSsmParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: Name of the Flagscript Organization S3 Deployment Bucket
+      Name: /organization/s3/deployment-bucket/name
+      Tags:
+        flagscript:application-id: organization
+        flagscript:client-id: !Ref OrganizationName
+        flagscript:environment: master
+        name: /organization/s3/deployment-bucket/name
+      Type: String
+      Value: !Ref OrganizationDeploymentBucket
+
+  ################
+  # CodeArtifact #
+  ################
+  OrganizationCodeArtifactDomain:
+    Type: AWS::CodeArtifact::Domain
+    Properties:
+      DomainName: !Ref OrganizationName
+      PermissionsPolicyDocument:
+        
+      
+  #############
+  # CodeBuild #
+  #############
+  OrganizationCodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+      Description: CodeBuild Service Role for Flagscript Organization CodeBuild Projects
+      Path: /organizations/codebuild/
+      RoleName: organizations-codebuild-r
+      Tags:
+        - Key: flagscript:application-id
+          Value: organizations
+        - Key: flagscript:client-id
+          Value: !Ref OrganizationName
+        - Key: flagscript:environment
+          Value: master
+        - Key: name
+          Value: organizations-codebuild-r
+
+  OrganizationCodeBuildPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - codebuild:StartBuild
+            Effect: Allow
+            Resource:
+              - !Sub arn:aws:codebuild:${AWS::Region}:${AWS::AccountId}:project/${OrganizationReleaseCodeBuildProject}
+              - !Sub arn:aws:codebuild:${AWS::Region}:${AWS::AccountId}:project/${OrganizationCiCodeBuildProject}
+            Sid: AllowBuildAccess
+          - Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Effect: Allow
+            Resource: '*'
+            Sid: AllowCodeBuildCloudWatchLogAccess
+          - Action:
+              - s3:ListBucketMultipartUploads
+            Effect: Allow
+            Resource:
+              - !GetAtt OrganizationDeploymentBucket.Arn
+            Sid: AllowDeploymentBucketWriteAccess
+          - Action:
+              - s3:AbortMultipartUpload
+              - s3:ListMultipartUploadParts
+              - s3:PutObject
+            Effect: Allow
+            Resource:
+              - !Join [ '', [!GetAtt OrganizationDeploymentBucket.Arn, '/*'] ]
+            Sid: AllowDeploymentBucketObjectWriteAccess
+          - Action:
+              - ssm:AddTagsToResource
+              - ssm:GetParameter*
+              - ssm:PutParameter
+              - ssm:RemoveTagsFromResource
+            Effect: Allow
+            Resource:
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/flagscript/organizations/version
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/flagscript/organizations/organization-name
+            Sid: PutFlagscriptOrganizationVersion
+      PolicyName: organizations-codebuild-p
+      Roles:
+        - !Ref OrganizationCodeBuildRole
+
+  OrganizationCiCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Condition: DoContinousIntegration
+    Properties:
+      Artifacts:
+        ArtifactIdentifier: code
+        Type: NO_ARTIFACTS
+      BadgeEnabled: true
+      Description: CodeBuild Continuous Integration Project for Flagscript Organizations
+      Environment:
+        ComputeType: !Ref CodeBuildComputeType
+        EnvironmentVariables:
+          - Name: PROJECT_TYPE
+            Type: PLAINTEXT
+            Value: Ci
+        Image: !Ref CodeBuildImageType
+        Type: LINUX_CONTAINER
+      Name: organizations-ci-codebuild-project
+      ServiceRole: !GetAtt OrganizationCodeBuildRole.Arn
+      Source:
+        Auth:
+          Type: OAUTH
+        GitCloneDepth: 1
+        Location: !Ref GitHubRepository
+        ReportBuildStatus: true
+        Type: GITHUB
+      SourceVersion: refs/heads/master
+      Tags:
+        - Key: flagscript:application-id
+          Value: organizations
+        - Key: flagscript:client-id
+          Value: !Ref OrganizationName
+        - Key: flagscript:environment
+          Value: root
+        - Key: name
+          Value: organizations-ci-codebuild-project
+      TimeoutInMinutes: 10
+      Triggers:
+        FilterGroups:
+          - - Pattern: PUSH
+              Type: EVENT
+            - Pattern: ^refs/heads/master$
+              Type: HEAD_REF
+            - ExcludeMatchedPattern: true
+              Pattern: ^refs/tags/.*
+              Type: HEAD_REF
+        Webhook: true
+
+  OrganizationsCiCodeBuildLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: DoContinousIntegration
+    Properties:
+      LogGroupName: !Sub /aws/codebuild/${OrganizationCiCodeBuildProject}
+      RetentionInDays: 7
+
+  OrganizationReleaseCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        ArtifactIdentifier: version
+        EncryptionDisabled: true
+        Location: !Ref OrganizationDeploymentBucket
+        Name: /
+        NamespaceType: NONE
+        Packaging: NONE
+        Type: S3
+      BadgeEnabled: true
+      Description: CodeBuild Release Project for Flagscript Organizations
+      Environment:
+        ComputeType: !Ref CodeBuildComputeType
+        EnvironmentVariables:
+          - Name: PROJECT_TYPE
+            Type: PLAINTEXT
+            Value: Release
+        Image: !Ref CodeBuildImageType
+        Type: LINUX_CONTAINER
+      Name: organizations-release-codebuild-project
+      SecondaryArtifacts:
+        - ArtifactIdentifier: layers
+          EncryptionDisabled: true
+          Location: !Ref OrganizationDeploymentBucket
+          Name: /
+          NamespaceType: NONE
+          Packaging: NONE
+          Path: layers
+          Type: S3
+      ServiceRole: !GetAtt OrganizationCodeBuildRole.Arn
+      Source:
+        Auth:
+          Type: OAUTH
+        GitCloneDepth: 1
+        Location: !Ref GitHubRepository
+        ReportBuildStatus: true
+        Type: GITHUB
+      SourceVersion: refs/heads/master
+      Tags:
+        - Key: flagscript:application-id
+          Value: organizations
+        - Key: flagscript:client-id
+          Value: !Ref OrganizationName
+        - Key: flagscript:environment
+          Value: root
+        - Key: name
+          Value: organizations-release-codebuild-project
+      TimeoutInMinutes: 10
+      Triggers:
+        FilterGroups:
+          - - Pattern: PUSH
+              Type: EVENT
+            - Pattern: ^refs/tags/.*
+              Type: HEAD_REF
+        Webhook: true
+
+  OrganizationsReleaseCodeBuildLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/codebuild/${OrganizationReleaseCodeBuildProject}
+      RetentionInDays: 7
+
+  ###########
+  # Options #
+  ###########
+  TemplateShareBucket:
+    Type: AWS::S3::Bucket
+    Condition: DoTemplateShare
+    Properties: 
+      BucketName: !Sub organizations-${AWS::AccountId}-${AWS::Region}-share-bucket
+      LoggingConfiguration:
+        DestinationBucketName: !Ref OrganizationS3AccessLoggingBucket
+        LogFilePrefix: inbound/
+      Tags:
+        - Key: flagscript:application-id
+          Value: organizations
+        - Key: flagscript:client-id
+          Value: !Ref OrganizationName
+        - Key: flagscript:environment
+          Value: root
+        - Key: name
+          Value: !Sub organizations-${AWS::AccountId}-${AWS::Region}-share-bucket    
+
+  TemplateShareBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: DoTemplateShare
+    Properties:
+      Bucket: !Ref TemplateShareBucket
+      PolicyDocument:
+        Statement:
+          - Action: 
+              - s3:GetObject
+            Effect: Allow
+            Resource: !Join [ '', [ !GetAtt TemplateShareBucket.Arn, '/templates/*' ] ]
+            Principal: '*'      
+
+Outputs:
+
+  ################
+  # Organization #
+  ################
+  OrganizationName:
+    Description:
+    Value: !Ref OrganizationName
+
+  OrganizationRegion:
+    Description: The primary region for the organization setup.
+    Value: !Ref OrganziationRegion
+
+  OrganizationNameSsmParameter:
+    Description: SSM Parameter where the Idenitifcation Name to be used for Organization Resources can be referenced
+    Value: !Ref OrganizationNameSsmParameter
+
+  #####################
+  # Deployment Bucket #
+  #####################
+  OrganizationDeploymentBucketName:
+    Description: Name of the Organization Deployment Bucket
+    Value: !Ref OrganizationDeploymentBucket
+
+  OrganizationDeploymentBucketArnSsmParameter:
+    Description: SSM Parameter where the Arn of the Organization Deployment Bucket can be referenced
+    Value: !Ref OrganizationDeploymentBucketArnSsmParameter
+
+  OrganizationDeploymentBucketNameSsmParameter:
+    Description: SSM Parameter where the Name of the Organizations Deployment Bucket can be referenced
+    Value: !Ref OrganizationDeploymentBucketNameSsmParameter
+
+  #############
+  # CodeBuild #
+  #############
+  OrganizationCiCodeBuildProjectName:
+    Condition: DoContinousIntegration
+    Description: Name of the Organization CI CodeBuild Project
+    Value: !Ref OrganizationCiCodeBuildProject
+
+  OrganizationReleaseCodeBuildProjectName:
+    Description: Name of the Organization Release CodeBuild Project
+    Value: !Ref OrganizationReleaseCodeBuildProject
