@@ -56,13 +56,13 @@ Resources:
           Value: flagscript
         - Key: flagscript:automation:environment
           Value: root          
-        - Key: example-inc:cost-allocation:application-id
+        - Key: flagscript:cost-allocation:application-id
           Value: organiztion-setup
         - Key: flagscript:cost-allocation:owner
           Value: flagscript          
         - Key: flagscript:data-owner:owner
           Value: flagscript       
-        - Key: example-inc:operations:owner
+        - Key: flagscript:operations:owner
           Value: flagscript   
         - Key: Name
           Value: terraform-state-lock  
@@ -90,13 +90,13 @@ Resources:
           Value: flagscript
         - Key: flagscript:automation:environment
           Value: root          
-        - Key: example-inc:cost-allocation:application-id
+        - Key: flagscript:cost-allocation:application-id
           Value: organiztion-setup
         - Key: flagscript:cost-allocation:owner
           Value: flagscript          
         - Key: flagscript:data-owner:owner
           Value: flagscript       
-        - Key: example-inc:operations:owner
+        - Key: flagscript:operations:owner
           Value: flagscript  
         - Key: Name
           Value: org-administrator         
@@ -145,17 +145,15 @@ Resources:
           Value: flagscript
         - Key: flagscript:automation:environment
           Value: root          
-        - Key: example-inc:cost-allocation:application-id
+        - Key: flagscript:cost-allocation:application-id
           Value: organiztion-setup
         - Key: flagscript:cost-allocation:owner
           Value: flagscript          
         - Key: flagscript:data-owner:owner
           Value: flagscript       
-        - Key: example-inc:operations:owner
+        - Key: flagscript:operations:owner
           Value: flagscript  
         - Key: Name
-          Value: org-administrator 
-        - Key: name
           Value: !Sub org-setup-${AWS::AccountId}-${AWS::Region}-terraform-state
       VersioningConfiguration:
         Status: Enabled 
