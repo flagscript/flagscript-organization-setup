@@ -1,5 +1,5 @@
 {
-  "name": "flagscript-organization-prereqs",
+  "name": "flagscript-organization-setup",
   "description": "PreRequisite CloudFormation Setup for Flagscript Organiztions.",
   "scripts": {
     "preinstall": "npx only-allow pnpm",
@@ -7,7 +7,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/flagscript/flagscript-organization-prereqs.git"
+    "url": "git+https://github.com/flagscript/flagscript-organization-setup.git"
   },
   "keywords": [
     "flagscript",
@@ -23,9 +23,9 @@
   },
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/flagscript/flagscript-organization-prereqs/issues"
+    "url": "https://github.com/flagscript/flagscript-organization-setup/issues"
   },
-  "homepage": "https://github.com/flagscript/flagscript-organization-prereqs#readme",
+  "homepage": "https://github.com/flagscript/flagscript-organization-setup#readme",
   "engines": {
     "pnpm": ">=9.7"
   },
