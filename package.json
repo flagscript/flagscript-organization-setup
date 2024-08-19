@@ -1,0 +1,35 @@
+{
+  "name": "flagscript-organization-prereqs",
+  "description": "PreRequisite CloudFormation Setup for Flagscript Organiztions.",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/flagscript/flagscript-organization-prereqs.git"
+  },
+  "keywords": [
+    "flagscript",
+    "aws",
+    "organizations",
+    "setup",
+    "prereqs",
+    "cloudformation"
+  ],
+  "author": {
+    "name": "Greg Kaestle",
+    "email": "flagscript@gmail.com"
+  },
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/flagscript/flagscript-organization-prereqs/issues"
+  },
+  "homepage": "https://github.com/flagscript/flagscript-organization-prereqs#readme",
+  "engines": {
+    "pnpm": ">=9"
+  },
+  "devDependencies": {
+    "husky": "^9.1.4",
+    "prettier": "^3.3.3"
+  }
+}
