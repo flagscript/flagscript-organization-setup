@@ -2,7 +2,8 @@
   "recommendations": [
     "eamodio.gitlens",
     "esbenp.prettier-vscode",
-    "github.vscode-github-actions"
+    "github.vscode-github-actions",
+    "kddejong.vscode-cfn-lint"
   ],
   "unwantedRecommendations": []
 }
