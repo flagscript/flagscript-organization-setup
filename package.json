@@ -2,6 +2,7 @@
   "name": "flagscript-organization-prereqs",
   "description": "PreRequisite CloudFormation Setup for Flagscript Organiztions.",
   "scripts": {
+    "preinstall": "npx only-allow pnpm",
     "prepare": "husky"
   },
   "repository": {
