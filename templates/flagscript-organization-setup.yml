@@ -6,6 +6,11 @@ Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
+          default: Regions
+        Parameters:
+          - PrimaryRegion
+          - BackupRegion
+      - Label:
           default: Iamic
         Parameters:
           - IdentityStoreId
@@ -14,6 +19,17 @@ Metadata:
     StackName: flagscript-organization-setup
 
 Parameters:
+  ###########
+  # Regions #
+  ###########
+  PrimaryRegion:
+    Description: The primary organization region.
+    Type: String
+
+  BackupRegion:
+    Description: The backup region for state data.
+    Type: String
+
   #########
   # Iamic #
   #########
@@ -25,12 +41,18 @@ Parameters:
     Description: The arn of the identity and access management identity center instance.
     Type: String
 
+Conditions:
+  IsPrimaryRegion: !Equals [!Ref PrimaryRegion, !Ref "AWS::Region"]
+  IsBackupRegion: !Equals [!Ref BackupRegion, !Ref "AWS::Region"]
+  IsEitherRegion: !Or [Condition: IsPrimaryRegion, Condition: IsBackupRegion]
+
 Resources:
   ##########
   # Dynamo #
   ##########
   TerraformLockTable:
     Type: AWS::DynamoDB::Table
+    Condition: IsPrimaryRegion
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -68,6 +90,7 @@ Resources:
   #######
   OrgAdministratorPolicy:
     Type: AWS::IAM::ManagedPolicy
+    Condition: IsPrimaryRegion
     Properties:
       Description: Policy for organization administrators.
       Path: /flagscript/
@@ -78,7 +101,7 @@ Resources:
               - dynamodb:PutItem
               - dynamodb:DeleteItem
             Effect: Allow
-            Resource: !GetAtt TerraformLockTable.Arn
+            Resource: !Sub arn:${AWS::Partition}:dynamodb:*:${AWS::AccountId}:table/terraform-state-lock
             Sid: TerraformStateLocking
           - Action:
               - organizations:*
@@ -97,15 +120,59 @@ Resources:
               - s3:PutObject
             Effect: Allow
             Resource:
-              - !Sub ${TerraformStateBucket.Arn}/*
+              - !Sub arn:${AWS::Partition}:s3:::org-setup-${AWS::AccountId}-*-terraform-state/*
             Sid: AllowTerraformStateBucketObjectAccess
         Version: 2012-10-17
+
+  OrgS3ReplicationRole:
+    Type: AWS::IAM::Role
+    Condition: IsPrimaryRegion
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - s3.amazonaws.com
+      Description: Role to replication the org state bucket.
+      Path: /s3/
+      RoleName: OrgS3ReplicationRole
+
+  BucketBackupPolicy:
+    Type: AWS::IAM::Policy
+    Condition: IsPrimaryRegion
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - s3:GetReplicationConfiguration
+              - s3:ListBucket
+            Effect: Allow
+            Resource: !GetAtt TerraformStateBucket.Arn
+          - Action:
+              - s3:GetObjectVersion
+              - s3:GetObjectVersionAcl
+              - s3:GetObjectVersionForReplication
+              - s3:GetObjectVersionTagging
+            Effect: Allow
+            Resource: !Sub ${TerraformStateBucket.Arn}/*
+          - Action:
+              - s3:ReplicateObject
+              - s3:ReplicateDelete
+            Effect: Allow
+            Resource: !Sub arn:${AWS::Partition}:s3:::org-setup-${AWS::AccountId}-${BackupRegion}-terraform-state
+      PolicyName: BucketBackupPolicy
+      Roles:
+        - !Ref OrgS3ReplicationRole
 
   #########
   # Iamic #
   #########
   OrgAdministratorGroup:
     Type: AWS::IdentityStore::Group
+    Condition: IsPrimaryRegion
     Properties:
       Description: Organization administrator group. Org root account only.
       DisplayName: org-administrator
@@ -113,6 +180,7 @@ Resources:
 
   OrgAdministratorPermissionSet:
     Type: AWS::SSO::PermissionSet
+    Condition: IsPrimaryRegion
     Properties:
       Description: Administrator permission set for the org root account ONLY.
       InstanceArn: !Ref InstanceArn
@@ -137,6 +205,7 @@ Resources:
 
   OrgAdministratorPermissionSetRootAccountAssignment:
     Type: AWS::SSO::Assignment
+    Condition: IsPrimaryRegion
     Properties:
       InstanceArn: !Ref InstanceArn
       PermissionSetArn: !GetAtt OrgAdministratorPermissionSet.PermissionSetArn
@@ -151,6 +220,7 @@ Resources:
   # Bucket to be used to maintain terraform state.
   TerraformStateBucket:
     Type: AWS::S3::Bucket
+    Condition: IsEitherRegion
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -169,11 +239,25 @@ Resources:
       NotificationConfiguration:
         EventBridgeConfiguration:
           EventBridgeEnabled: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         IgnorePublicAcls: true
         BlockPublicPolicy: true
         RestrictPublicBuckets: true
+      ReplicationConfiguration: !If
+        - IsPrimaryRegion
+        - Role: !GetAtt OrgS3ReplicationRole.Arn
+          Rules:
+            - Destination:
+                Bucket: !Sub arn:${AWS::Partition}:s3:::org-setup-${AWS::AccountId}-${BackupRegion}-terraform-state
+                StorageClass: STANDARD
+              Id: Backup
+              Prefix: ""
+              Status: Enabled
+        - !Ref "AWS::NoValue"
       Tags:
         - Key: flagscript:account-owner:owner
           Value: flagscript
@@ -196,6 +280,7 @@ Resources:
   # to expect files to be encrypted at rest with aws:kms.
   TerraformStateBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    Condition: IsEitherRegion
     Properties:
       Bucket: !Ref TerraformStateBucket
       PolicyDocument:
