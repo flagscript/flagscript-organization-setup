@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: 2010-09-09
 
-Description: Deploys the base resources necessary for aws cicd.
+Description: Deploys the state bucket used to setup the organization.
 
 Metadata:
   AWS::CloudFormation::Interface:
